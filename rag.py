@@ -1,76 +1,74 @@
-import os
-from dotenv import load_dotenv
-from google import genai
-
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+from langchain_ollama import OllamaLLM
 
 # -----------------------------------
-# CONFIG
+# EMBEDDINGS LOCALES
 # -----------------------------------
 
-load_dotenv()
-
-API_KEY = os.getenv("GEMINI_API_KEY")
-
-client = genai.Client(api_key=API_KEY)
-
-# -----------------------------------
-# EMBEDDINGS
-# -----------------------------------
-
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/embedding-001",
-    google_api_key=API_KEY
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
 # -----------------------------------
 # VECTOR DB
 # -----------------------------------
 
-vector_db = Chroma(
+vector_store = Chroma(
     persist_directory="chroma_db",
     embedding_function=embeddings
 )
 
-retriever = vector_db.as_retriever(
-    search_kwargs={"k": 4}
+retriever = vector_store.as_retriever(
+    search_kwargs={"k": 3}
 )
 
 # -----------------------------------
-# PROMPT
+# LLM LOCAL
+# -----------------------------------
+
+llm = OllamaLLM(
+    model="llama3"
+)
+
+# -----------------------------------
+# SYSTEM PROMPT
 # -----------------------------------
 
 SYSTEM_PROMPT = """
 Eres un asistente académico especializado en reglamentos universitarios.
 
-REGLAS IMPORTANTES:
+REGLAS OBLIGATORIAS:
 
-1. Responde SOLO usando el CONTEXTO.
-2. No inventes información.
-3. Si el contexto no contiene la respuesta responde EXACTAMENTE:
-   "No encuentro esa información en el reglamento".
-4. Explica de manera clara y breve.
-5. Cita los artículos relevantes si aparecen.
+1. Responde ÚNICAMENTE usando el CONTEXTO proporcionado.
+2. NO deduzcas.
+3. NO infieras.
+4. NO completes información faltante.
+5. Si la respuesta no aparece explícitamente en el contexto responde EXACTAMENTE:
+"No encuentro esa información en el reglamento".
+6. NO uses conocimiento externo.
+7. Si el contexto no habla directamente del tema, responde que no existe información.
 
 FORMATO:
 
 ### Respuesta
 ### Artículos Relacionados
 """
-
 # -----------------------------------
 # FUNCIÓN PRINCIPAL
 # -----------------------------------
 
 def preguntar(query):
 
+    # Recuperación semántica
     docs = retriever.invoke(query)
 
+    # Construcción contexto
     contexto = "\n\n".join(
         [doc.page_content for doc in docs]
     )
 
+    # Prompt aumentado
     prompt = f"""
 {SYSTEM_PROMPT}
 
@@ -81,11 +79,14 @@ def preguntar(query):
 <PREGUNTA>
 {query}
 </PREGUNTA>
+
+Recuerda:
+- Si la respuesta no está explícitamente en el contexto,
+responde:
+"No encuentro esa información en el reglamento"
 """
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
-    )
+    # Generación respuesta
+    respuesta = llm.invoke(prompt)
 
-    return response.text, docs
+    return respuesta, docs

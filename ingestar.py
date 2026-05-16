@@ -1,18 +1,7 @@
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
-
-from dotenv import load_dotenv
-import os
-
-# -----------------------------------
-# CONFIG
-# -----------------------------------
-
-load_dotenv()
-
-API_KEY = os.getenv("GEMINI_API_KEY")
 
 # -----------------------------------
 # CARGA PDF
@@ -38,16 +27,15 @@ chunks = splitter.split_documents(docs)
 print(f"Chunks generados: {len(chunks)}")
 
 # -----------------------------------
-# EMBEDDINGS
+# EMBEDDINGS LOCALES
 # -----------------------------------
 
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="embedding-001",
-    google_api_key=API_KEY
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
 # -----------------------------------
-# VECTOR STORE
+# VECTOR DB
 # -----------------------------------
 
 vector_db = Chroma.from_documents(
